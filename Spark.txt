@@ -1,0 +1,122 @@
+###################################################
+Ketulkumar Suthar
+8578056
+28/04/2020
+###################################################3
+# Start Spark Shell
+
+spark-shell --master yarn --jars commons-csv-1.5.jar,spark-csv_2.10-1.5.0.jar
+
+import org.apache.spark.sql.SQLContext
+
+import org.apache.spark.sql.types.{StructType, StructField, StringType, IntegerType, LongType, FloatType};
+
+import org.apache.spark.sql.functions.regexp_replace
+
+val sqlContext = new SQLContext(sc)
+
+# Employee Table
+
+
+
+# 1)Create a relation with employee dataset with schema (column names and datatype) and name it employee. Once created, describe the relation.
+
+val emp_schema = new StructType()
+.add("emp_id",IntegerType)
+.add("name",StringType)
+.add("designation",StringType)
+.add("department_id",IntegerType)
+.add("salary",FloatType)
+
+val employee = sqlContext.read.format("com.databricks.spark.csv")
+.option("header", "false") 
+.option("delimiter",",")
+.schema(emp_schema)
+.load("file:////home/cloudera/employee_dataset")
+
+
+employee.schema
+
+#2)	Select the columns from the employee relation. Display 10 of these  records on your screen.
+
+val employeedf = employee.select($"emp_id",$"name",$"designation",$"department_id",$"salary")
+
+employeedf.show(10)
+
+
+# 3)Create a relation with department dataset with schema (column names and datatype) and name it departments. Once created, describe the relation
+
+
+
+val dept_schema = new StructType()
+.add("d_id",IntegerType)
+.add("dname",StringType)
+.add("address",StringType)
+
+var departments = sqlContext.read.format("com.databricks.spark.csv")
+.option("header", "false") 
+.schema(dept_schema)
+.option("delimiter",";")
+.load("file:////home/cloudera/department_dataset")
+
+departments = departments.withColumn("Street",split("address",",").getItem(0))
+.withColumn("City",split("address",",").getItem(1))
+.withColumn("State",split("address",",").getItem(2))
+.drop("address")
+
+departments = departments.withColumn("Street",regexp_replace(departments("Street"),"\\[street#",""))
+.withColumn("City",regexp_replace(departments("City"),"city#",""))
+.withColumn("State",regexp_replace(departments("City"),"[state#|\\]]",""))
+
+
+departments.schema
+
+# 4)Select the columns from the department relation. Display 10 of these records on your screen.
+
+val departmentdf = departments.select("d_id","dname","Street","City","State")
+
+departmentdf.show(10)
+
+# 5)Create a relation with bonus dataset with schema (column names and datatype) and name it bonus. Once created, describe the relation.
+
+val bonus_schema = new StructType()
+.add("e_id",IntegerType)
+.add("bonus", FloatType)
+
+var bonus = sqlContext.read.format("com.databricks.spark.csv")
+.option("header", "false") 
+.option("delimiter",",")
+.schema(bonus_schema)
+.load("file:////home/cloudera/employee_bonus")
+
+bonus.schema
+
+# 6)Select the columns from the bonus relation. Display 10 of these  records on your screen.
+val bonusdf = bonus.select(col("e_id"),col("bonus"))
+
+bonusdf.show(10)
+
+# 7) Join employee and department dataset to display Department Name and Department Address (as 3 separate columns - street, city and state) for each row in employee. Display 10 of these records on your screen.
+
+val emp_dept = employee.join(departments,employee("department_id") === departments("d_id"),"left_outer").select("emp_id","name","designation","salary","dname","Street","City","State")
+
+emp_dept.show()
+
+# 8) Display all the employees who received bonus. The result should not display any employees who did not receive a bonus. Display 10 of these records on your screen.
+
+val emp_bonus = employee.join(bonus,employee("emp_id") === bonus("e_id"),"right_outer").select($"emp_id",$"name",$"designation",$"department_id",$"salary",$"bonus").show(10)
+
+emp_bonus.show(10)
+
+
+# 9) Display the average bonus by department
+
+val avg_bonus_dpet = employee.join(bonus,employee("emp_id") === bonus("e_id"),"right_outer").join(departments,employee("department_id")=== departments("d_id"),"left_outer").groupBy("d_id").avg("bonus")
+
+avg_bonus_dpet.show()
+
+# 10) Display the number of employees in each department
+
+val employee_by_dept = employee.join(departments, employee("department_id") === departments("d_id"),"left_outer").groupBy("department_id").count
+
+employee_by_dept.show()
